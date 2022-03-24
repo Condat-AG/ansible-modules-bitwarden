@@ -141,7 +141,10 @@ class Bitwarden(object):
 
     def get_custom_field(self, key, field):
         data = json.loads(self.get_entry(key, 'item'))
-        return next(x for x in data['fields'] if x['name'] == field)['value']
+        customValues = list(map(lambda f: f['value'], filter(lambda f: f['name'] == field, data['fields'])))
+        if len(customValues) == 1:
+        	return customValues[0]
+        return customValues
 
     def get_attachments(self, key, itemid, output):
         attachment = ['get', 'attachment', '{}'.format(
