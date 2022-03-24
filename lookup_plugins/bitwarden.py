@@ -191,11 +191,15 @@ class LookupModule(LookupBase):
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: {0} <field> <name> [name name ...]"
-              .format(os.path.basename(__file__)))
+        print("Usage: {0} <field> <name> [name name ...]".format(os.path.basename(__file__)))
+        print("Usage: {0} <json-lookup> <name> [name name ...]".format(os.path.basename(__file__)))
+        print('example: bitwarden.py \'{"field":"testuser", "custom_field":true}\' "<name>"')
         return -1
-
-    print(LookupModule().run(sys.argv[2:], None, field=sys.argv[1]))
+    try:
+        options = json.loads(sys.argv[1])
+    except json.decoder.JSONDecodeError:
+        options = { "field": sys.argv[1] }
+    print(LookupModule().run(sys.argv[2:], None, **options))
 
     return 0
 
