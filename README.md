@@ -7,7 +7,7 @@ Bitwarden integration for Ansible.
 The easiest way to install this lookup plugin is to use the
 `ansible-galaxy` command:
 
-    ansible-galaxy install git+https://github.com/c0sco/ansible-modules-bitwarden
+    ansible-galaxy install git+https://github.com/kemcon/ansible-modules-bitwarden.git
 
 This will place the `ansible-modules-bitwarden` role into
 `$HOME/.ansible/roles`, where it will be available to all playbooks
