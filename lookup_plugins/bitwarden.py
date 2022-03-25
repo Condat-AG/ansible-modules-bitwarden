@@ -178,6 +178,7 @@ class Bitwarden(object):
                     return item
             return item
 
+
     def get_attachments(self, key, itemid, output, filename, organizationId, collectionId):
         attachmentArray = ['get', 'attachment', 
             '{}'.format(key), 
