@@ -32,6 +32,9 @@ followed by the items you want to retrieve. The default field is
 named argument. If you need to specify the path to the Bitwarden CLI
 binary, use the `path` named argument.
 
+You can use `organizationId` and `collectionId` as optional properties 
+to select a specific item. 
+
 ## Examples
 
 ### Get a single password
