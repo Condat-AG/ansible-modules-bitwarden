@@ -42,11 +42,11 @@ options:
     description: name of item that contains the field to fetch
     required: true
 field:
-  description: field to return from bitwarden
+  description: 
+   - field to return from bitwarden (item, username, password, uri, totp, notes, exposed, attachment, folder, collection, org-collection, organization, template, fingerprint, send)
+   - if field is no bitwarden field, then every field from `bw get item <term>` as json can be read. eg field=fields.some_custom_field or field=id
   default: 'password'
-custom_field:
-  description: If True, look up named field in custom fields instead
-      of top-level dictionary.
+
 sync:
   description: If True, call `bw sync` before lookup
 """
@@ -132,21 +132,58 @@ class Bitwarden(object):
             raise AnsibleError("Error decoding Bitwarden status: %s" % e)
         return data['status']
 
-    def get_entry(self, key, field):
-        return self._run(["get", field, key])
+    def get_entry(self, key, field, organizationId, collectionId):
+        try: 
+            return self._run(["get", field, key])
+        except AnsibleError as err:
+            if "More than one result was found." in err.message:
+                # find first in the organisation and collection
+                allData = json.loads(self._run(["list", "items", "--search", key]))
+                firstFound = False
+                for data in allData:
+                    if data['name'] != key:
+                        continue
+                    if collectionId is not None and not (collectionId in data['collectionIds']):
+                        continue
+                    if organizationId is not None and data['organizationId'] != organizationId:
+                        continue
+                    firstFound = True
+                    break
+                if (firstFound and (collectionId is not None or organizationId is not None)):
+                    return self.get_entry(data['id'], field, organizationId, collectionId)
+                else:
+                    raise AnsibleError("no item='%s' in organization and/or collection found" % (key))
+            else:
+                # field was no bitwarden <object>
+                item = json.loads(self.get_entry(key, 'item', organizationId, collectionId))
+                if organizationId is not None and item['organizationId'] != organizationId:
+                    raise AnsibleError("no item='%s' in organization found" % (key))
+                if collectionId is not None and not (collectionId in item['collectionIds']):
+                    raise AnsibleError("no item='%s' in collection found" % (key))
 
-    def get_notes(self, key):
-        data = json.loads(self.get_entry(key, 'item'))
-        return data['notes']
+            splitted = field.split(".")
+            for v in splitted:
+                if isinstance(item, dict) and (v in item):
+                    item = item[v]
+                elif isinstance(item, list):
+                    if (splitted[0] == "fields"):
+                        filtered = filter(lambda oneItem: ('name' in oneItem) and oneItem['name']==v, item)
+                        return list(map(lambda oneItem: oneItem['value'], filtered))
+                    else:
+                        if isinstance(item[0], dict):
+                            item = list(map(lambda oneItem: oneItem[v], item))
+                        else:
+                            return item
+                else:
+                    return item
+            return item
 
-    def get_custom_field(self, key, field):
-        data = json.loads(self.get_entry(key, 'item'))
-        return next(x for x in data['fields'] if x['name'] == field)['value']
-
-    def get_attachments(self, key, itemid, output):
-        attachment = ['get', 'attachment', '{}'.format(
-            key), '--output={}'.format(output), '--itemid={}'.format(itemid)]
-        return self._run(attachment)
+    def get_attachments(self, key, itemid, output, filename, organizationId, collectionId):
+        attachmentArray = ['get', 'attachment', 
+            '{}'.format(key), 
+            '--output={}{}'.format(output, filename), 
+            '--itemid={}'.format(itemid)]
+        return self._run(attachmentArray)
 
 
 class LookupModule(LookupBase):
@@ -160,6 +197,8 @@ class LookupModule(LookupBase):
                                "BW_SESSION environment variable first")
 
         field = kwargs.get('field', 'password')
+        organizationId = kwargs.get('organizationId')
+        collectionId = kwargs.get('collectionId')
         values = []
 
         if kwargs.get('sync'):
@@ -168,31 +207,37 @@ class LookupModule(LookupBase):
             bw.session = kwargs.get('session')
 
         for term in terms:
-            if kwargs.get('custom_field'):
-                values.append(bw.get_custom_field(term, field))
-            elif field == 'notes':
-                values.append(bw.get_notes(term))
-            elif kwargs.get('attachments'):
-                if kwargs.get('itemid'):
-                    itemid = kwargs.get('itemid')
-                    output = kwargs.get('output', term)
-                    values.append(bw.get_attachments(term, itemid, output))
+            if 'attachments' in kwargs:
+                itemid = term
+                attachments = kwargs.get('attachments')
+                output = kwargs.get('output', term)
+                if isinstance(attachments, list):
+                    for attachment in attachments:
+                        if (output.endswith('/')):
+                            values.append(bw.get_attachments(attachment, itemid, output, attachment, organizationId, collectionId))
+                        else:
+                            values.append(bw.get_attachments(attachment, itemid, output+"/", attachment, organizationId, collectionId))
                 else:
-                    raise AnsibleError("Missing value for - itemid - "
-                                       "Please set parameters as example: - "
-                                       "itemid='f12345-d343-4bd0-abbf-4532222' ")
+                    if (output.endswith('/')):
+                        values.append(bw.get_attachments(attachments, itemid, output, attachments, organizationId, collectionId))
+                    else:
+                        values.append(bw.get_attachments(attachments, itemid, output, "", organizationId, collectionId))
             else:
-                values.append(bw.get_entry(term, field))
+                values.append(bw.get_entry(term, field, organizationId, collectionId))
         return values
 
 
 def main():
     if len(sys.argv) < 3:
-        print("Usage: {0} <field> <name> [name name ...]"
-              .format(os.path.basename(__file__)))
+        print("Usage: {0} <field> <name> [name name ...]".format(os.path.basename(__file__)))
+        print("Usage: {0} <json-lookup> <name> [name name ...]".format(os.path.basename(__file__)))
+        print('example: bitwarden.py \'{"field":"fields.testuser"}\' "<name>"')
         return -1
-
-    print(LookupModule().run(sys.argv[2:], None, field=sys.argv[1]))
+    try:
+        options = json.loads(sys.argv[1])
+    except json.decoder.JSONDecodeError as err:
+        options = { "field": sys.argv[1] }
+    print(LookupModule().run(sys.argv[2:], None, **options))
 
     return 0
 
