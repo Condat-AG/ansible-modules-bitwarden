@@ -42,7 +42,7 @@ options:
     description: name of item that contains the field to fetch
     required: true
 field:
-  description: 
+  description:
    - field to return from bitwarden (item, username, password, uri, totp, notes, exposed, attachment, folder, collection, org-collection, organization, template, fingerprint, send)
    - if field is no bitwarden field, then every field from `bw get item <term>` as json can be read. eg field=fields.some_custom_field or field=id
   default: 'password'
@@ -133,7 +133,7 @@ class Bitwarden(object):
         return data['status']
 
     def get_entry(self, key, field, organizationId, collectionId):
-        try: 
+        try:
             return self._run(["get", field, key])
         except AnsibleError as err:
             if "More than one result was found." in err.message:
@@ -180,9 +180,9 @@ class Bitwarden(object):
 
 
     def get_attachments(self, key, itemid, output, filename, organizationId, collectionId):
-        attachmentArray = ['get', 'attachment', 
-            '{}'.format(key), 
-            '--output={}{}'.format(output, filename), 
+        attachmentArray = ['get', 'attachment',
+            '{}'.format(key),
+            '--output={}{}'.format(output, filename),
             '--itemid={}'.format(itemid)]
         return self._run(attachmentArray)
 
