@@ -22,6 +22,10 @@ in your play.  For example:
       roles:
         - ansible-modules-bitwarden
 
+Or add the modules directory to the lookup plugins environment variable
+
+    `export ANSIBLE_LOOKUP_PLUGINS=/working-dirs/.roles/ansible-modules-bitwarden`
+
 Use Ansible's `lookup()` function with the `bitwarden` argument,
 followed by the items you want to retrieve. The default field is
 `password`, but any other field can be specified using the `field`
@@ -103,13 +107,12 @@ ok: [localhost] => {
     }
 }
 ```
-
 ### Get the value of a custom field
 
 ```yaml
 # Get the value of a custom field
 - debug:
-    msg: {{ lookup('bitwarden', 'Google', field='mycustomfield', custom_field=true) }}
+    msg: {{ lookup('bitwarden', 'Google', field='fields.mycustomfield') }}
 ```
 
 The above might result in:
@@ -120,21 +123,60 @@ ok: [localhost] => {
     "msg": "the value of my custom field"
     }
 ```
+Or, when muliple fields have the same name:
+```
+TASK [debug] *********************************************************
+ok: [localhost] => {
+    "msg": ["the value of my custom field", "second custom field with same name but different value"]
+    }
+```
 
-### download attachments files
+### Get all values of a custom field
 
 ```yaml
 # Get the value of a custom field
 - debug:
-    msg: {{ lookup('bitwarden', 'privateKey.pem',  itemid='123456-1234-1234-abbf-60c345aaa3e', attachments=true ) }}
+    msg: {{ lookup('bitwarden', 'Google', field='fields') }}
 ```
-Optional parameters - output='/ansible/publicKey.pem'
 
 The above might result in:
 
 ```
 TASK [debug] *********************************************************
 ok: [localhost] => {
-    "msg": "Saved /publicKey.pem"
+    "msg": ["name": "custom_field_name", "value": "the value of my custom field"]
+    }
+```
+
+### download attachment file
+
+```yaml
+# Get the value of a custom field
+- debug:
+    msg: {{ lookup('bitwarden', 'My Secure Credentials', attachments='privateKey.pem' ) }}
+```
+Optional parameters - output='/ansible/publicKey.pem' or output='/ansible/'
+
+The above might result in:
+
+```
+TASK [debug] *********************************************************
+ok: [localhost] => {
+    "msg": "Saved /privateKey.pem"
+    }
+```
+
+### download multiple attachment files into same directory
+
+```yaml
+# Get the value of a custom field
+- debug:
+    msg: {{ lookup('bitwarden', 'My Secure Credentials', attachments=['privateKey.pem', 'publicKey.pem'], output='/tmp/local' ) }}
+```
+The above might result in:
+```
+TASK [debug] *********************************************************
+ok: [localhost] => {
+    "msg": ["Saved /tmp/local/privateKey.pem", "Saved /tmp/local/publicKey.pem"]
     }
 ```
