@@ -7,7 +7,7 @@ Bitwarden integration for Ansible.
 The easiest way to install this lookup plugin is to use the
 `ansible-galaxy` command:
 
-    ansible-galaxy install git+https://github.com/kemcon/ansible-modules-bitwarden.git
+    ansible-galaxy install git+https://github.com/c0sco/ansible-modules-bitwarden
 
 This will place the `ansible-modules-bitwarden` role into
 `$HOME/.ansible/roles`, where it will be available to all playbooks
@@ -32,8 +32,9 @@ followed by the items you want to retrieve. The default field is
 named argument. If you need to specify the path to the Bitwarden CLI
 binary, use the `path` named argument.
 
-You can use `organizationId` and `collectionId` as optional properties
-to select a specific item.
+You can use `organization` and `collection` as optional properties 
+to select a specific item in organization or collection.
+You can use an id or a name.
 
 ## Examples
 
@@ -70,7 +71,6 @@ ok: [localhost] => {
     "msg": "alice"
     }
 ```
-
 ### See all available fields
 
 ```yaml
@@ -131,6 +131,40 @@ Or, when muliple fields have the same name:
 TASK [debug] *********************************************************
 ok: [localhost] => {
     "msg": ["the value of my custom field", "second custom field with same name but different value"]
+    }
+```
+
+### Get the value of a custom field in organization
+
+```yaml
+# Get the value of a custom field
+- debug:
+    msg: {{ lookup('bitwarden', 'Google', field='fields.mycustomfield', organization='My Company') }}
+```
+
+The above might result in:
+
+```
+TASK [debug] *********************************************************
+ok: [localhost] => {
+    "msg": "alice"
+    }
+```
+
+### Get the value of a custom field in collection
+
+```yaml
+# Get the value of a custom field
+- debug:
+    msg: {{ lookup('bitwarden', 'Google', field='fields.mycustomfield', collection='My/Collection') }}
+```
+
+The above might result in:
+
+```
+TASK [debug] *********************************************************
+ok: [localhost] => {
+    "msg": "alice"
     }
 ```
 
