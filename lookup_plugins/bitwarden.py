@@ -13,6 +13,7 @@ __metaclass__ = type
 import json
 import os
 import sys
+import uuid
 
 from subprocess import Popen, PIPE, STDOUT, check_output
 
@@ -65,6 +66,10 @@ RETURN = """
 
 
 class Bitwarden(object):
+
+    collectionId = None
+    organizationId = None
+
     def __init__(self, path):
         self._cli_path = path
         self._bw_session = ""
@@ -132,7 +137,7 @@ class Bitwarden(object):
             raise AnsibleError("Error decoding Bitwarden status: %s" % e)
         return data['status']
 
-    def get_entry(self, key, field, organizationId, collectionId):
+    def get_entry(self, key, field, organization, collection):
         try:
             return self._run(["get", field, key])
         except AnsibleError as err:
@@ -143,23 +148,19 @@ class Bitwarden(object):
                 for data in allData:
                     if data['name'] != key:
                         continue
-                    if collectionId is not None and not (collectionId in data['collectionIds']):
-                        continue
-                    if organizationId is not None and data['organizationId'] != organizationId:
+                    if not self.isInCollectionAndOranisation(data, organization, collection):
                         continue
                     firstFound = True
                     break
-                if (firstFound and (collectionId is not None or organizationId is not None)):
-                    return self.get_entry(data['id'], field, organizationId, collectionId)
+                if (firstFound and (collection is not None or organization is not None)):
+                    return self.get_entry(data['id'], field, organization, collection)
                 else:
                     raise AnsibleError("no item='%s' in organization and/or collection found" % (key))
             else:
                 # field was no bitwarden <object>
-                item = json.loads(self.get_entry(key, 'item', organizationId, collectionId))
-                if organizationId is not None and item['organizationId'] != organizationId:
-                    raise AnsibleError("no item='%s' in organization found" % (key))
-                if collectionId is not None and not (collectionId in item['collectionIds']):
-                    raise AnsibleError("no item='%s' in collection found" % (key))
+                item = json.loads(self.get_entry(key, 'item', organization, collection))
+                if not self.isInCollectionAndOranisation(item, organization, collection):
+                    raise AnsibleError("no item='%s' in organization/collection found" % (key))
 
             splitted = field.split(".")
             for v in splitted:
@@ -178,6 +179,40 @@ class Bitwarden(object):
                     return item
             return item
 
+    def is_valid_uuid(self, value):
+        try:
+            uuid.UUID(value)
+            return True
+        except ValueError:
+            return False
+
+    def isInCollectionAndOranisation(self, item, organization, collection):
+        if (collection is None):
+            self.collectionId = None
+        elif self.collectionId is not None:
+            pass
+        elif self.is_valid_uuid(collection):
+            self.collectionId = collection
+        else:
+            self.collectionId = next(map(lambda c: c['id'], filter(lambda c: c['name']==collection, \
+                json.loads(self._run(["list", "collections", "--search", collection])))), None)
+            if self.collectionId is None:
+                raise AnsibleError("no collectionId for '%s' found" % (collection))
+
+        if (organization is None):
+            self.organizationId = None
+        elif self.organizationId is not None:
+            pass
+        elif self.is_valid_uuid(organization):
+            self.organizationId = organization
+        else:
+            try:
+                self.organizationId = json.loads(self._run(["get", "organization", organization]))['id']
+            except AnsibleError as err:
+                raise AnsibleError("no organizationId for '%s' found" % (organization))
+
+        return self.collectionId is None or self.collectionId in item['collectionIds'] \
+            and (self.organizationId is None or item['organizationId'] == self.organizationId)
 
     def get_attachments(self, key, itemid, output, filename, organizationId, collectionId):
         attachmentArray = ['get', 'attachment',
@@ -198,8 +233,8 @@ class LookupModule(LookupBase):
                                "BW_SESSION environment variable first")
 
         field = kwargs.get('field', 'password')
-        organizationId = kwargs.get('organizationId')
-        collectionId = kwargs.get('collectionId')
+        organization = kwargs.get('organization')
+        collection = kwargs.get('collection')
         values = []
 
         if kwargs.get('sync'):
@@ -215,16 +250,16 @@ class LookupModule(LookupBase):
                 if isinstance(attachments, list):
                     for attachment in attachments:
                         if (output.endswith('/')):
-                            values.append(bw.get_attachments(attachment, itemid, output, attachment, organizationId, collectionId))
+                            values.append(bw.get_attachments(attachment, itemid, output, attachment, organization, collection))
                         else:
-                            values.append(bw.get_attachments(attachment, itemid, output+"/", attachment, organizationId, collectionId))
+                            values.append(bw.get_attachments(attachment, itemid, output+"/", attachment, organization, collection))
                 else:
                     if (output.endswith('/')):
-                        values.append(bw.get_attachments(attachments, itemid, output, attachments, organizationId, collectionId))
+                        values.append(bw.get_attachments(attachments, itemid, output, attachments, organization, collection))
                     else:
-                        values.append(bw.get_attachments(attachments, itemid, output, "", organizationId, collectionId))
+                        values.append(bw.get_attachments(attachments, itemid, output, "", organization, collection))
             else:
-                values.append(bw.get_entry(term, field, organizationId, collectionId))
+                values.append(bw.get_entry(term, field, organization, collection))
         return values
 
 
