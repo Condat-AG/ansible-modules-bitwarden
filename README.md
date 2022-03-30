@@ -7,11 +7,19 @@ Bitwarden integration for Ansible.
 The easiest way to install this lookup plugin is to use the
 `ansible-galaxy` command:
 
-    ansible-galaxy install git+https://github.com/c0sco/ansible-modules-bitwarden
+    ansible-galaxy install git+https://github.com/kemcon/ansible-modules-bitwarden
 
 This will place the `ansible-modules-bitwarden` role into
-`$HOME/.ansible/roles`, where it will be available to all playbooks
+`$HOME/.roles`, where it will be available to all playbooks
 you run on your system.
+
+Use command:
+
+    ansible-galaxy install -f -p /usr/share/ansible/plugins/lookup git+https://github.com/kemcon/ansible-modules-bitwarden
+
+This will place the `ansible-modules-bitwarden` plugin into
+an Ansible Lookup Plugin directory. Where it will be available
+to all playbooks without further configuration.
 
 ## Lookup plugin
 
@@ -24,7 +32,9 @@ in your play.  For example:
 
 Or add the modules directory to the lookup plugins environment variable
 
-    `export ANSIBLE_LOOKUP_PLUGINS=/working-dirs/.roles/ansible-modules-bitwarden`
+    `export ANSIBLE_LOOKUP_PLUGINS=$HOME/.roles/ansible-modules-bitwarden`
+
+Or use the above download into an Ansible Lookup Plugin directory.
 
 Use Ansible's `lookup()` function with the `bitwarden` argument,
 followed by the items you want to retrieve. The default field is

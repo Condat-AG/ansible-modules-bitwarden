@@ -260,6 +260,8 @@ class LookupModule(LookupBase):
                         values.append(bw.get_attachments(attachments, itemid, output, "", organization, collection))
             else:
                 values.append(bw.get_entry(term, field, organization, collection))
+        if len(values) == 1:
+            return values[0]
         return values
 
 
