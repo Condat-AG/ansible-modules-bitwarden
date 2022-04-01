@@ -67,6 +67,7 @@ RETURN = """
 
 class Bitwarden(object):
 
+    ANSIBLE_ERROR_MORE_THAN_ONE_RESULT="More than one result was found."
     collectionId = None
     organizationId = None
 
@@ -141,21 +142,8 @@ class Bitwarden(object):
         try:
             return self._run(["get", field, key])
         except AnsibleError as err:
-            if "More than one result was found." in err.message:
-                # find first in the organisation and collection
-                allData = json.loads(self._run(["list", "items", "--search", key]))
-                firstFound = False
-                for data in allData:
-                    if data['name'] != key:
-                        continue
-                    if not self.isInCollectionAndOranisation(data, organization, collection):
-                        continue
-                    firstFound = True
-                    break
-                if (firstFound and (collection is not None or organization is not None)):
-                    return self.get_entry(data['id'], field, organization, collection)
-                else:
-                    raise AnsibleError("no item='%s' in organization and/or collection found" % (key))
+            if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message:
+                return self.get_entry(self.handleMoreThanOneKey(key, organization, collection), field, organization, collection)
             else:
                 # field was no bitwarden <object>
                 item = json.loads(self.get_entry(key, 'item', organization, collection))
@@ -186,6 +174,22 @@ class Bitwarden(object):
         except ValueError:
             return False
 
+    def handleMoreThanOneKey(self, key, organization, collection):
+        # find first in the organisation and collection
+        allData = json.loads(self._run(["list", "items", "--search", key]))
+        firstFound = False
+        for data in allData:
+            if data['name'] != key:
+                continue
+            if not self.isInCollectionAndOranisation(data, organization, collection):
+                continue
+            firstFound = True
+            break
+        if (firstFound):
+            return data['id']
+        else:
+            raise AnsibleError("no item='%s' in organization and/or collection found" % (key))
+
     def isInCollectionAndOranisation(self, item, organization, collection):
         if (collection is None):
             self.collectionId = None
@@ -214,12 +218,39 @@ class Bitwarden(object):
         return self.collectionId is None or self.collectionId in item['collectionIds'] \
             and (self.organizationId is None or item['organizationId'] == self.organizationId)
 
-    def get_attachments(self, key, itemid, output, filename, organizationId, collectionId):
-        attachmentArray = ['get', 'attachment',
-            '{}'.format(key),
-            '--output={}{}'.format(output, filename),
-            '--itemid={}'.format(itemid)]
-        return self._run(attachmentArray)
+    def get_attachments(self, key, itemid, output, filename, organization, collection):
+        try:
+            attachmentArray = ['get', 'attachment',
+                '{}'.format(key),
+                '--output={}{}'.format(output, filename),
+                '--itemid={}'.format(itemid)]
+            return self._run(attachmentArray)
+        except AnsibleError as err:
+            # these error could be both, itemid or attachment id, just check the itemid now
+            if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message:
+                itemid = self.handleMoreThanOneKey(itemid, organization, collection)
+                try:
+                    attachmentArray = ['get', 'attachment',
+                        '{}'.format(key),
+                        '--output={}{}'.format(output, filename),
+                        '--itemid={}'.format(itemid)]
+                    return self._run(attachmentArray)
+                except AnsibleError as err2:
+                    # these are definitly the attachment names = key, download the first one
+                    if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message:
+                        attachmentList = json.loads(self.get_entry(itemid, 'item', organization, collection))["attachments"]
+                        for attachment in attachmentList:
+                            if attachment['fileName'] != key:
+                                continue
+                            attachmentArray = ['get', 'attachment',
+                                '{}'.format(attachment['id']),
+                                '--output={}{}'.format(output, filename),
+                                '--itemid={}'.format(itemid)]
+                            return self._run(attachmentArray)
+            else:
+                raise err
+
+
 
 
 class LookupModule(LookupBase):
