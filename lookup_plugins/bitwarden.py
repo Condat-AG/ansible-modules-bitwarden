@@ -291,8 +291,6 @@ class LookupModule(LookupBase):
                         values.append(bw.get_attachments(attachments, itemid, output, "", organization, collection))
             else:
                 values.append(bw.get_entry(term, field, organization, collection))
-        if len(values) == 1:
-            return values[0]
         return values
 
 
@@ -306,7 +304,11 @@ def main():
         options = json.loads(sys.argv[1])
     except json.decoder.JSONDecodeError as err:
         options = { "field": sys.argv[1] }
-    print(LookupModule().run(sys.argv[2:], None, **options))
+    values = LookupModule().run(sys.argv[2:], None, **options)
+    if len(values)==1:
+        print(values[0])
+    else:
+        print(values)
 
     return 0
 
