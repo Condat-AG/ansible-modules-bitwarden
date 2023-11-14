@@ -142,30 +142,45 @@ class Bitwarden(object):
         try:
             return self._run(["get", field, key])
         except AnsibleError as err:
-            if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message:
-                return self.get_entry(self.handleMoreThanOneKey(key, organization, collection), field, organization, collection)
-            else:
+            # do nothing
+            pass
+        foundId = ""
+        try:
+            foundId = self.searchForId(key, organization, collection)
+            return self._run(["get", field, foundId])
+        except AnsibleError as err:
+            pass
+        try:
+            if field != "item":
                 # field was no bitwarden <object>
-                item = json.loads(self.get_entry(key, 'item', organization, collection))
+                if (not foundId is None):
+                    item = json.loads(self._run(["get", 'item', foundId]))
+                else:
+                    item = json.loads(self._run(["get", 'item', key]))
                 if not self.isInCollectionAndOranisation(item, organization, collection):
                     raise AnsibleError("no item='%s' in organization/collection found" % (key))
-
-            splitted = field.split(".")
-            for v in splitted:
-                if isinstance(item, dict) and (v in item):
-                    item = item[v]
-                elif isinstance(item, list):
-                    if (splitted[0] == "fields"):
-                        filtered = filter(lambda oneItem: ('name' in oneItem) and oneItem['name']==v, item)
-                        return list(map(lambda oneItem: oneItem['value'], filtered))
-                    else:
-                        if isinstance(item[0], dict):
-                            item = list(map(lambda oneItem: oneItem[v], item))
+                splitted = field.split(".")
+                for v in splitted:
+                    if isinstance(item, dict) and (v in item):
+                        item = item[v]
+                    elif isinstance(item, list):
+                        if (splitted[0] == "fields"):
+                            filtered = filter(lambda oneItem: ('name' in oneItem) and oneItem['name']==v, item)
+                            return list(map(lambda oneItem: oneItem['value'], filtered))
                         else:
-                            return item
-                else:
-                    return item
-            return item
+                            if isinstance(item[0], dict):
+                                item = list(map(lambda oneItem: oneItem[v], item))
+                            else:
+                                return item
+                    else:
+                        return item
+                return item
+        except AnsibleError as err:
+            # do nothing
+            pass
+        raise AnsibleError("no item='%s' in organization and/or collection found" % (key))
+
+
 
     def is_valid_uuid(self, value):
         try:
@@ -174,9 +189,15 @@ class Bitwarden(object):
         except ValueError:
             return False
 
-    def handleMoreThanOneKey(self, key, organization, collection):
+    def searchForId(self, key, organization, collection):
+        try:
+            return self.__searchForIdWithKeys(key, organization, collection, [key])
+        except AnsibleError as err:
+            return self.__searchForIdWithKeys(key, organization, collection, key.split(' '))
+
+    def __searchForIdWithKeys(self, key, organization, collection, keys):
         # find first in the organisation and collection
-        allData = json.loads(self._run(["list", "items", "--search", key]))
+        allData = json.loads(self._run(["list", "items", "--search"] + keys))
         firstFound = False
         for data in allData:
             if data['name'] != key:
