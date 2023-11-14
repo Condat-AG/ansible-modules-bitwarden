@@ -68,7 +68,7 @@ RETURN = """
 class Bitwarden(object):
 
     ANSIBLE_ERROR_MORE_THAN_ONE_RESULT="More than one result was found."
-    ANSIBLE_ERROR_NOT_FOUND="Not found."
+    ANSIBLE_ERROR_NOT_FOUND="not found"
     collectionId = None
     organizationId = None
 
@@ -243,8 +243,8 @@ class Bitwarden(object):
             return self._run(attachmentArray)
         except AnsibleError as err:
             # these error could be both, itemid or attachment id, just check the itemid now
-            if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message:
-                itemid = self.handleMoreThanOneKey(itemid, organization, collection)
+            if Bitwarden.ANSIBLE_ERROR_MORE_THAN_ONE_RESULT in err.message or Bitwarden.ANSIBLE_ERROR_NOT_FOUND in err.message:
+                itemid = self.searchForId(itemid, organization, collection)
                 try:
                     attachmentArray = ['get', 'attachment',
                         '{}'.format(key),
